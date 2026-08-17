@@ -4,12 +4,12 @@ from enum import Enum
 class textType(Enum):
     """Enum for text types."""
 
-    PLAIN = 1
-    BOLD = 2
-    ITALIC = 3
-    CODE = 4
-    LINK = 5
-    IMAGE = 6
+    PLAIN = "plain"
+    BOLD = "bold"
+    ITALIC = "italic"
+    CODE = "code"
+    LINK = "link"
+    IMAGE = "image"
 
 class TextNode:
     """Class representing a text node."""
@@ -18,9 +18,6 @@ class TextNode:
         self.text = text
         self.text_type = text_type
         self.url = url
-
-    def __str__(self):
-        return f"TextNode(text={self.text}, text_type={self.text_type}, url={self.url})"
 
     def __eq__(self, other):
         if not isinstance(other, TextNode):
