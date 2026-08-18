@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class textType(Enum):
+class TextType(Enum):
     """Enum for text types."""
 
     PLAIN = "plain"
@@ -14,7 +14,7 @@ class textType(Enum):
 class TextNode:
     """Class representing a text node."""
 
-    def __init__(self, text: str, text_type: textType, url: str = None):
+    def __init__(self, text: str, text_type: TextType, url: str = None):
         self.text = text
         self.text_type = text_type
         self.url = url
