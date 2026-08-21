@@ -1,8 +1,8 @@
 from htmlnode import HtmlNode
 
 class LeafNode(HtmlNode):
-    def __init__(self, tag: str, value: str, attributes: dict[str, str]|None=None) -> None:
-        super().__init__(tag, value, attributes=attributes)
+    def __init__(self, tag: str, value: str, props: dict[str, str]|None=None) -> None:
+        super().__init__(tag, value, props=props)
 
     def to_html(self) -> str:
         if not self.value:
@@ -12,4 +12,4 @@ class LeafNode(HtmlNode):
         return f"<{self.tag}{self.props_to_html()}>{self.value}</{self.tag}>"
 
     def __repr__(self) -> str:
-        return f"LeafNode(tag={self.tag}, value={self.value}, attributes={self.attributes})"
+        return f"LeafNode(tag={self.tag}, value={self.value}, props={self.props})"
