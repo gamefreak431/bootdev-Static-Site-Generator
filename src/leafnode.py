@@ -1,8 +1,8 @@
-from htmlnode import HtmlNode
+from htmlnode import HTMLNode
 
-class LeafNode(HtmlNode):
+class LeafNode(HTMLNode):
     def __init__(self, tag: str, value: str, props: dict[str, str]|None=None) -> None:
-        super().__init__(tag, value, props=props)
+        super().__init__(tag=tag, value=value, props=props)
 
     def to_html(self) -> str:
         if not self.value:
