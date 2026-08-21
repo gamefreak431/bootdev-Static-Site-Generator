@@ -3,18 +3,18 @@ from htmlnode import HTMLNode
 
 class TestHTMLNode(unittest.TestCase):
     def test_eq(self):
-        node = HTMLNode("div", props={"class": "container"})
-        node2 = HTMLNode("div", props={"class": "container"})
+        node = HTMLNode(tag="div", props={"class": "container"})
+        node2 = HTMLNode(tag="div", props={"class": "container"})
         self.assertEqual(node, node2)
 
     def test_not_eq(self):
-        node = HTMLNode("div", props={"class": "container"})
-        node2 = HTMLNode("span", props={"class": "container"})
+        node = HTMLNode(tag="div", props={"class": "container"})
+        node2 = HTMLNode(tag="span", props={"class": "container"})
         self.assertNotEqual(node, node2)
 
     def test_not_eq_different_attributes(self):
-        node = HTMLNode("div", props={"class": "container"})
-        node2 = HTMLNode("div", props={"id": "main"})
+        node = HTMLNode(tag="div", props={"class": "container"})
+        node2 = HTMLNode(tag="div", props={"id": "main"})
         self.assertNotEqual(node, node2)
 
     def test_eq_non_htmlnode(self):
