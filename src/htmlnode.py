@@ -33,12 +33,3 @@ class HTMLNode:
 
     def set_attribute(self, key, value):
         self.props[key] = value
-
-    def render(self):
-        attrs = self.props_to_html()
-        opening_tag = f'<{self.tag} {attrs}>' if attrs else f'<{self.tag}>'
-        closing_tag = f'</{self.tag}>'
-        if self.value:
-            return f'{opening_tag}{self.value}{closing_tag}'
-        children_html = ''.join(child.render() for child in self.children)
-        return f'{opening_tag}{children_html}{closing_tag}'
