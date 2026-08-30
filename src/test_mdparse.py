@@ -5,6 +5,7 @@ from mdparse import (
     extract_markdown_links,
     split_nodes_image,
     split_nodes_link,
+    text_to_textnodes,
 )
 from textnode import TextNode, TextType
 
@@ -406,4 +407,112 @@ class TestSplitNodesDelimiter(unittest.TestCase):
                 TextNode("link", TextType.LINK, "https://boot.dev"),
             ],
             new_nodes,
+        )
+
+    def test_text_to_textnodes(self):
+        text = "This is **text** with an _italic_ word and a `code block` and an ![obi wan image](https://i.imgur.com/fJRm4Vk.jpeg) and a [link](https://boot.dev)"
+        nodes = text_to_textnodes(text)
+        self.assertEqual(len(nodes), 10)
+        self.assertEqual(nodes[0].text, "This is ")
+        self.assertEqual(nodes[1].text, "text")
+        self.assertEqual(nodes[1].text_type, TextType.BOLD)
+        self.assertEqual(nodes[2].text, " with an ")
+        self.assertEqual(nodes[3].text, "italic")
+        self.assertEqual(nodes[3].text_type, TextType.ITALIC)
+        self.assertEqual(nodes[4].text, " word and a ")
+        self.assertEqual(nodes[5].text, "code block")
+        self.assertEqual(nodes[5].text_type, TextType.CODE)
+        self.assertEqual(nodes[6].text, " and an ")
+        self.assertEqual(nodes[7].text, "obi wan image")
+        self.assertEqual(nodes[7].text_type, TextType.IMAGE)
+        self.assertEqual(nodes[7].url, "https://i.imgur.com/fJRm4Vk.jpeg")
+        self.assertEqual(nodes[8].text, " and a ")
+        self.assertEqual(nodes[9].text, "link")
+        self.assertEqual(nodes[9].text_type, TextType.LINK)
+        self.assertEqual(nodes[9].url, "https://boot.dev")
+
+    def test_text_to_textnodes_delimiter_in_already_split_node_does_not_raise(self):
+        # Regression test: an underscore inside an already-BOLD node used to
+        # trip the odd/even delimiter check meant only for TEXT nodes.
+        nodes = text_to_textnodes("**bold_word** and _italic_")
+        self.assertEqual(
+            nodes,
+            [
+                TextNode(text="bold_word", text_type=TextType.BOLD),
+                TextNode(text=" and ", text_type=TextType.TEXT),
+                TextNode(text="italic", text_type=TextType.ITALIC),
+            ],
+        )
+
+    def test_text_to_textnodes_with_plain_text(self):
+        text = "This is plain text with no markdown at all."
+        nodes = text_to_textnodes(text)
+        self.assertEqual(nodes, [TextNode(text=text, text_type=TextType.TEXT)])
+
+    def test_text_to_textnodes_with_empty_string(self):
+        nodes = text_to_textnodes("")
+        self.assertEqual(nodes, [TextNode(text="", text_type=TextType.TEXT)])
+
+    def test_text_to_textnodes_with_unmatched_delimiter_raises(self):
+        with self.assertRaises(ValueError):
+            text_to_textnodes("This is _broken italic")
+
+    def test_text_to_textnodes_with_adjacent_styles_no_space(self):
+        nodes = text_to_textnodes("**bold**_italic_")
+        self.assertEqual(
+            nodes,
+            [
+                TextNode(text="bold", text_type=TextType.BOLD),
+                TextNode(text="italic", text_type=TextType.ITALIC),
+            ],
+        )
+
+    def test_text_to_textnodes_with_multiple_images_and_links(self):
+        text = "![a](https://boot.dev/a.png)![b](https://boot.dev/b.png) and [c](https://boot.dev/c)[d](https://boot.dev/d)"
+        nodes = text_to_textnodes(text)
+        self.assertEqual(
+            nodes,
+            [
+                TextNode(text="a", text_type=TextType.IMAGE, url="https://boot.dev/a.png"),
+                TextNode(text="b", text_type=TextType.IMAGE, url="https://boot.dev/b.png"),
+                TextNode(text=" and ", text_type=TextType.TEXT),
+                TextNode(text="c", text_type=TextType.LINK, url="https://boot.dev/c"),
+                TextNode(text="d", text_type=TextType.LINK, url="https://boot.dev/d"),
+            ],
+        )
+
+    def test_text_to_textnodes_with_underscore_in_url(self):
+        # Images/links are extracted before delimiter splitting, so an
+        # underscore inside a URL is no longer misread as an italic
+        # delimiter.
+        nodes = text_to_textnodes("![alt](https://example.com/foo_bar.png)")
+        self.assertEqual(
+            nodes,
+            [TextNode(text="alt", text_type=TextType.IMAGE, url="https://example.com/foo_bar.png")],
+        )
+
+    def test_text_to_textnodes_with_underscore_in_code_span(self):
+        # Code spans are split before bold/italic, so their contents are
+        # treated as literal text instead of being scanned for markdown.
+        nodes = text_to_textnodes("This is `snake_case` code")
+        self.assertEqual(
+            nodes,
+            [
+                TextNode(text="This is ", text_type=TextType.TEXT),
+                TextNode(text="snake_case", text_type=TextType.CODE),
+                TextNode(text=" code", text_type=TextType.TEXT),
+            ],
+        )
+
+    def test_text_to_textnodes_with_bold_inside_code_span(self):
+        # Code spans should be treated as literal even when they contain
+        # characters that would otherwise be a bold/italic delimiter.
+        nodes = text_to_textnodes("This is `**not bold**` code")
+        self.assertEqual(
+            nodes,
+            [
+                TextNode(text="This is ", text_type=TextType.TEXT),
+                TextNode(text="**not bold**", text_type=TextType.CODE),
+                TextNode(text=" code", text_type=TextType.TEXT),
+            ],
         )

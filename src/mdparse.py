@@ -19,16 +19,16 @@ def split_nodes_delimiter(old_nodes: list[TextNode], delimiter: str, text_type: 
     """
     new_nodes = []
     for node in old_nodes:
+        if node.text_type != TextType.TEXT:
+            new_nodes.append(node)
+            continue
         if node.text.count(delimiter) % 2 != 0:
             raise ValueError(f"Invalid Markdown syntax: unmatched delimiter '{delimiter}' in text: {node.text}")
-        if node.text_type == TextType.TEXT:
-            parts = node.text.split(delimiter)
-            new_nodes.extend(
-                TextNode(text=part, text_type=text_type if i % 2 else TextType.TEXT)
-                for i, part in enumerate(parts) if part
-            )
-        else:
-            new_nodes.append(node)
+        parts = node.text.split(delimiter)
+        new_nodes.extend(
+            TextNode(text=part, text_type=text_type if i % 2 else TextType.TEXT)
+            for i, part in enumerate(parts) if part
+        )
     return new_nodes
 
 def extract_markdown_images(text: str) -> list[tuple[str, str]]:
@@ -73,3 +73,18 @@ def split_nodes_link(old_nodes: list[TextNode]) -> list[TextNode]:
         elif last_index < len(node.text):
             new_nodes.append(TextNode(text=node.text[last_index:], text_type=TextType.TEXT))
     return new_nodes
+
+def text_to_textnodes(text: str) -> list[TextNode]:
+    # Images and links are extracted first so a URL's characters (e.g. an
+    # underscore) are never mistaken for a bold/italic/code delimiter.
+    # Code spans are split before bold/italic for the same reason: a code
+    # span's contents are literal and shouldn't be interpreted as markdown.
+    delimiters = [
+        ("`", TextType.CODE),
+        ("**", TextType.BOLD),
+        ("_", TextType.ITALIC),
+    ]
+    nodes = split_nodes_link(split_nodes_image([TextNode(text=text, text_type=TextType.TEXT)]))
+    for delimiter, text_type in delimiters:
+        nodes = split_nodes_delimiter(nodes, delimiter, text_type) or nodes
+    return nodes
