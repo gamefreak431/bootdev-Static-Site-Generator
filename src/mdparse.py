@@ -88,3 +88,20 @@ def text_to_textnodes(text: str) -> list[TextNode]:
     for delimiter, text_type in delimiters:
         nodes = split_nodes_delimiter(nodes, delimiter, text_type) or nodes
     return nodes
+
+def markdown_to_blocks(markdown: str) -> list[TextNode]:
+    """Convert a markdown string to a list of text nodes.
+
+    Args:
+        markdown (str): The markdown string to convert.
+
+    Returns:
+        list[TextNode]: A list of text nodes representing the markdown.
+    """
+    lines = markdown.split("\n\n")
+    blocks = []
+    for line in lines:
+        if line.strip() == "":
+            continue
+        blocks.append(line.strip())
+    return blocks
