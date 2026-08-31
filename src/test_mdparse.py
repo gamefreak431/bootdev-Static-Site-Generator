@@ -537,3 +537,56 @@ This is the same paragraph on a new line
                 "- This is a list\n- with items",
             ],
         )
+
+    def test_markdown_to_blocks_with_link_at_end_of_block(self):
+        md = """Check out this [link](https://boot.dev)
+
+Next paragraph"""
+        blocks = markdown_to_blocks(md)
+        self.assertEqual(
+            blocks,
+            [
+                "Check out this [link](https://boot.dev)",
+                "Next paragraph",
+            ],
+        )
+
+    def test_markdown_to_blocks_with_link_at_start_of_block(self):
+        md = """Intro paragraph
+
+[link](https://boot.dev) is here"""
+        blocks = markdown_to_blocks(md)
+        self.assertEqual(
+            blocks,
+            [
+                "Intro paragraph",
+                "[link](https://boot.dev) is here",
+            ],
+        )
+
+    def test_markdown_to_blocks_with_leading_newline_before_image_block(self):
+        # A newline directly before a block that is only an image: strip()
+        # should remove the leading newline without touching any of the
+        # image markdown itself, including the URL.
+        md = "\n![alt text](https://boot.dev/image.png)\n\nSome other text"
+        blocks = markdown_to_blocks(md)
+        self.assertEqual(
+            blocks,
+            [
+                "![alt text](https://boot.dev/image.png)",
+                "Some other text",
+            ],
+        )
+
+    def test_markdown_to_blocks_with_trailing_newline_after_link_block(self):
+        # A newline directly after the final block's link: strip() should
+        # remove the trailing newline without truncating the URL.
+        md = "First block\n\nSecond block with a [link](https://boot.dev)\n"
+        blocks = markdown_to_blocks(md)
+        self.assertEqual(
+            blocks,
+            [
+                "First block",
+                "Second block with a [link](https://boot.dev)",
+            ],
+        )
