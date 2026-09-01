@@ -1,9 +1,20 @@
+from enum import Enum
 import re
 from textnode import TextNode, TextType
 
 
 IMAGE_REGEX = re.compile(r'!\[(.*?)\]\((.*?)\)')
 LINK_REGEX = re.compile(r'(?<!!)\[(.*?)\]\((.*?)\)')
+
+class BlockType(Enum):
+    """Enum for block types."""
+
+    PARAGRAPH = "paragraph"
+    HEADING = "heading"
+    CODE = "code"
+    QUOTE = "quote"
+    ULIST = "unordered_list"
+    OLIST = "ordered_list"
 
 
 def split_nodes_delimiter(old_nodes: list[TextNode], delimiter: str, text_type: TextType) -> list[TextNode]:
@@ -99,3 +110,26 @@ def markdown_to_blocks(markdown: str) -> list[str]:
         list[str]: A list of strings representing the markdown blocks.
     """
     return [line.strip() for line in markdown.split("\n\n") if line.strip() != ""]
+
+def block_to_block_type(block: str) -> BlockType:
+    """Determine the block type of a markdown block.
+
+    Args:
+        block (str): The markdown block to analyze.
+
+    Returns:
+        BlockType: The type of the markdown block.
+    """
+    match block:
+        case _ if re.match(r"^#{1,6}\s", block):
+            return BlockType.HEADING
+        case _ if re.match(r"^>\s?", block):
+            return BlockType.QUOTE
+        case _ if re.match(r"^\-\s", block):
+            return BlockType.ULIST
+        case _ if re.match(r"^\d+\.\s", block):
+            return BlockType.OLIST
+        case _ if re.match(r"^```", block):
+            return BlockType.CODE
+        case _:
+            return BlockType.PARAGRAPH
