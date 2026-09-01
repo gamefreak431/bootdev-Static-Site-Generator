@@ -1,10 +1,14 @@
 from enum import Enum
 import re
+from htmlnode import HTMLNode
 from textnode import TextNode, TextType
 
 
 IMAGE_REGEX = re.compile(r'!\[(.*?)\]\((.*?)\)')
 LINK_REGEX = re.compile(r'(?<!!)\[(.*?)\]\((.*?)\)')
+QUOTE_LINE_PATTERN = re.compile(r"^>\s?")
+ULIST_LINE_PATTERN = re.compile(r"^\-\s")
+OLIST_LINE_PATTERN = re.compile(r"^(\d+)\.\s")
 
 class BlockType(Enum):
     """Enum for block types."""
@@ -121,11 +125,9 @@ def block_to_block_type(block: str) -> BlockType:
         BlockType: The type of the markdown block.
     """
     def _is_valid_ulist(block: str) -> bool:
-        ULIST_LINE_PATTERN = re.compile(r"^\-\s")
         return all(ULIST_LINE_PATTERN.match(line) for line in block.split("\n"))
 
     def _is_valid_olist(block: str) -> bool:
-        OLIST_LINE_PATTERN = re.compile(r"^(\d+)\.\s")
         for i, line in enumerate(block.split("\n"), start=1):
             match = OLIST_LINE_PATTERN.match(line)
             if not match or int(match.group(1)) != i:
@@ -133,7 +135,6 @@ def block_to_block_type(block: str) -> BlockType:
         return True
 
     def _is_valid_quote(block: str) -> bool:
-        QUOTE_LINE_PATTERN = re.compile(r"^>\s?")
         return all(QUOTE_LINE_PATTERN.match(line) for line in block.split("\n"))
 
     def _is_valid_code_block(block: str) -> bool:
@@ -153,3 +154,60 @@ def block_to_block_type(block: str) -> BlockType:
             return BlockType.CODE
         case _:
             return BlockType.PARAGRAPH
+
+def block_type_to_html_node(block: str, block_type: BlockType) -> HTMLNode:
+    match block_type:
+        case BlockType.PARAGRAPH:
+            text_nodes = text_to_textnodes(block)
+            html_children = [text_node.text_node_to_html_node() for text_node in text_nodes]
+            return HTMLNode(tag="p", children=html_children)
+        case BlockType.HEADING:
+            heading_level = len(re.match(r"^(#+)\s", block).group(1))
+            heading_text = re.sub(r"^#{1,6}\s", "", block)
+            text_nodes = text_to_textnodes(heading_text)
+            html_children = [text_node.text_node_to_html_node() for text_node in text_nodes]
+            return HTMLNode(tag=f"h{heading_level}", children=html_children)
+        case BlockType.CODE:
+            code_content = "\n".join(block.split("\n")[1:-1])
+            return HTMLNode(tag="pre", children=[HTMLNode(tag="code", children=[code_content])])
+        case BlockType.QUOTE:
+            quote_lines = [re.sub(QUOTE_LINE_PATTERN, "", line) for line in block.split("\n")]
+            quote_text = "\n".join(quote_lines)
+            text_nodes = text_to_textnodes(quote_text)
+            html_children = [text_node.text_node_to_html_node() for text_node in text_nodes]
+            return HTMLNode(tag="blockquote", children=html_children)
+        case BlockType.ULIST:
+            list_items = [re.sub(ULIST_LINE_PATTERN, "", line) for line in block.split("\n")]
+            html_children = []
+            for item in list_items:
+                text_nodes = text_to_textnodes(item)
+                li_children = [text_node.text_node_to_html_node() for text_node in text_nodes]
+                html_children.append(HTMLNode(tag="li", children=li_children))
+            return HTMLNode(tag="ul", children=html_children)
+        case BlockType.OLIST:
+            list_items = [re.sub(OLIST_LINE_PATTERN, "", line) for line in block.split("\n")]
+            html_children = []
+            for item in list_items:
+                text_nodes = text_to_textnodes(item)
+                li_children = [text_node.text_node_to_html_node() for text_node in text_nodes]
+                html_children.append(HTMLNode(tag="li", children=li_children))
+            return HTMLNode(tag="ol", children=html_children)
+        case _:
+            raise ValueError(f"Unsupported block type: {block_type}")
+
+def markdown_to_html_node(markdown: str) -> HTMLNode:
+    """Convert a markdown string to an HTML node.
+
+    Args:
+        markdown (str): The markdown string to convert.
+
+    Returns:
+        HTMLNode: The HTML node representing the markdown.
+    """
+    blocks = markdown_to_blocks(markdown)
+    html_nodes = []
+    for block in blocks:
+        block_type = block_to_block_type(block)
+        node = block_type_to_html_node(block, block_type)
+        html_nodes.append(node)
+    return HTMLNode(tag="div", children=html_nodes)
