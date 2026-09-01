@@ -12,7 +12,6 @@ OLIST_LINE_PATTERN = re.compile(r"^(\d+)\.\s")
 
 class BlockType(Enum):
     """Enum for block types."""
-
     PARAGRAPH = "paragraph"
     HEADING = "heading"
     CODE = "code"
@@ -23,12 +22,10 @@ class BlockType(Enum):
 
 def split_nodes_delimiter(old_nodes: list[TextNode], delimiter: str, text_type: TextType) -> list[TextNode]:
     """Split text nodes by a delimiter and return a list of new text nodes.
-
     Args:
         old_nodes (list[TextNode]): The list of old text nodes to split.
         delimiter (str): The delimiter to split the text nodes by.
         text_type (TextType): The type of the new text nodes.
-
     Returns:
         list[TextNode]: A list of new text nodes after splitting.
     """
@@ -90,10 +87,11 @@ def split_nodes_link(old_nodes: list[TextNode]) -> list[TextNode]:
     return new_nodes
 
 def text_to_textnodes(text: str) -> list[TextNode]:
-    # Images and links are extracted first so a URL's characters (e.g. an
-    # underscore) are never mistaken for a bold/italic/code delimiter.
-    # Code spans are split before bold/italic for the same reason: a code
-    # span's contents are literal and shouldn't be interpreted as markdown.
+    """Images and links are extracted first so a URL's characters 
+    (e.g. an underscore) are never mistaken for a bold/italic/code delimiter.
+    Code spans are split before bold/italic for the same reason: 
+    a code span's contents are literal and shouldn't be interpreted as markdown.
+    """
     delimiters = [
         ("`", TextType.CODE),
         ("**", TextType.BOLD),
@@ -106,10 +104,8 @@ def text_to_textnodes(text: str) -> list[TextNode]:
 
 def markdown_to_blocks(markdown: str) -> list[str]:
     """Convert a markdown string to a list of markdown blocks.
-
     Args:
         markdown (str): The markdown string to convert.
-
     Returns:
         list[str]: A list of strings representing the markdown blocks.
     """
@@ -117,10 +113,8 @@ def markdown_to_blocks(markdown: str) -> list[str]:
 
 def block_to_block_type(block: str) -> BlockType:
     """Determine the block type of a markdown block.
-
     Args:
         block (str): The markdown block to analyze.
-
     Returns:
         BlockType: The type of the markdown block.
     """
