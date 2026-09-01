@@ -191,10 +191,8 @@ def block_type_to_html_node(block: str, block_type: BlockType) -> HTMLNode:
 
 def markdown_to_html_node(markdown: str) -> HTMLNode:
     """Convert a markdown string to an HTML node.
-
     Args:
         markdown (str): The markdown string to convert.
-
     Returns:
         HTMLNode: The HTML node representing the markdown.
     """
