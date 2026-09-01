@@ -120,16 +120,36 @@ def block_to_block_type(block: str) -> BlockType:
     Returns:
         BlockType: The type of the markdown block.
     """
+    def _is_valid_ulist(block: str) -> bool:
+        ULIST_LINE_PATTERN = re.compile(r"^\-\s")
+        return all(ULIST_LINE_PATTERN.match(line) for line in block.split("\n"))
+
+    def _is_valid_olist(block: str) -> bool:
+        OLIST_LINE_PATTERN = re.compile(r"^(\d+)\.\s")
+        for i, line in enumerate(block.split("\n"), start=1):
+            match = OLIST_LINE_PATTERN.match(line)
+            if not match or int(match.group(1)) != i:
+                return False
+        return True
+
+    def _is_valid_quote(block: str) -> bool:
+        QUOTE_LINE_PATTERN = re.compile(r"^>\s?")
+        return all(QUOTE_LINE_PATTERN.match(line) for line in block.split("\n"))
+
+    def _is_valid_code_block(block: str) -> bool:
+        lines = block.split("\n")
+        return len(lines) > 1 and lines[0].startswith("```") and lines[-1] == "```"
+
     match block:
         case _ if re.match(r"^#{1,6}\s", block):
             return BlockType.HEADING
-        case _ if re.match(r"^>\s?", block):
+        case _ if _is_valid_quote(block):
             return BlockType.QUOTE
-        case _ if re.match(r"^\-\s", block):
+        case _ if _is_valid_ulist(block):
             return BlockType.ULIST
-        case _ if re.match(r"^\d+\.\s", block):
+        case _ if _is_valid_olist(block):
             return BlockType.OLIST
-        case _ if re.match(r"^```", block):
+        case _ if _is_valid_code_block(block):
             return BlockType.CODE
         case _:
             return BlockType.PARAGRAPH

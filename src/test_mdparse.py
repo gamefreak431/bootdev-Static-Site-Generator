@@ -7,6 +7,8 @@ from mdparse import (
     split_nodes_image,
     split_nodes_link,
     text_to_textnodes,
+    block_to_block_type,
+    BlockType,
 )
 from textnode import TextNode, TextType
 
@@ -590,3 +592,113 @@ Next paragraph"""
                 "Second block with a [link](https://boot.dev)",
             ],
         )
+
+
+class TestBlockToBlockType(unittest.TestCase):
+    def test_block_to_block_type_with_headings(self):
+        for level in range(1, 7):
+            block = f"{'#' * level} Heading text"
+            with self.subTest(level=level):
+                self.assertEqual(block_to_block_type(block), BlockType.HEADING)
+
+    def test_block_to_block_type_with_heading_missing_space(self):
+        self.assertEqual(block_to_block_type("#NoSpace"), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_heading_too_many_hashes(self):
+        self.assertEqual(block_to_block_type("####### Too many"), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_quote(self):
+        self.assertEqual(block_to_block_type("> a quote"), BlockType.QUOTE)
+
+    def test_block_to_block_type_with_quote_no_space_after_marker(self):
+        self.assertEqual(block_to_block_type(">a quote"), BlockType.QUOTE)
+
+    def test_block_to_block_type_with_quote_multiple_lines(self):
+        # Spec allows the > marker with or without the trailing space, and
+        # both forms may appear in the same quote block.
+        block = "> line one\n>line two\n> line three"
+        self.assertEqual(block_to_block_type(block), BlockType.QUOTE)
+
+    def test_block_to_block_type_with_quote_broken_second_line(self):
+        # Regression test: previously only the first line was checked, so a
+        # block like this one was misclassified as QUOTE.
+        block = "> line one\nnot a quote line"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_paragraph(self):
+        self.assertEqual(
+            block_to_block_type("Just a normal paragraph of text."),
+            BlockType.PARAGRAPH,
+        )
+
+    def test_block_to_block_type_with_multiline_paragraph(self):
+        self.assertEqual(
+            block_to_block_type("Line one\nLine two continues here"),
+            BlockType.PARAGRAPH,
+        )
+
+    def test_block_to_block_type_with_ulist_single_line(self):
+        self.assertEqual(block_to_block_type("- item"), BlockType.ULIST)
+
+    def test_block_to_block_type_with_ulist_multiple_lines(self):
+        block = "- item one\n- item two\n- item three"
+        self.assertEqual(block_to_block_type(block), BlockType.ULIST)
+
+    def test_block_to_block_type_with_ulist_missing_space_after_dash(self):
+        self.assertEqual(block_to_block_type("-item"), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_ulist_broken_second_line(self):
+        # Regression test: previously only the first line was checked, so a
+        # block like this one was misclassified as ULIST.
+        block = "- item one\nnot a list item"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_olist_single_line(self):
+        self.assertEqual(block_to_block_type("1. item"), BlockType.OLIST)
+
+    def test_block_to_block_type_with_olist_multiple_lines_sequential(self):
+        block = "1. item one\n2. item two\n3. item three"
+        self.assertEqual(block_to_block_type(block), BlockType.OLIST)
+
+    def test_block_to_block_type_with_olist_not_starting_at_one(self):
+        block = "2. item one\n3. item two"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_olist_skipped_number(self):
+        block = "1. item one\n3. item two"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_olist_repeated_number(self):
+        block = "1. item one\n1. item two"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_olist_line_missing_marker(self):
+        # Regression test: a line with no number match must short-circuit
+        # before group(1) is accessed, not raise IndexError.
+        block = "1. item one\njust some text"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_code_block(self):
+        block = "```\nprint('hello')\n```"
+        self.assertEqual(block_to_block_type(block), BlockType.CODE)
+
+    def test_block_to_block_type_with_code_block_language_tag(self):
+        block = "```python\nprint('hello')\n```"
+        self.assertEqual(block_to_block_type(block), BlockType.CODE)
+
+    def test_block_to_block_type_with_code_block_empty(self):
+        block = "```\n```"
+        self.assertEqual(block_to_block_type(block), BlockType.CODE)
+
+    def test_block_to_block_type_with_code_block_unclosed(self):
+        block = "```\nprint('hello')"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_code_block_single_line(self):
+        self.assertEqual(block_to_block_type("```"), BlockType.PARAGRAPH)
+
+    def test_block_to_block_type_with_code_block_closing_fence_has_trailing_content(self):
+        # Regression test: the closing fence must be exactly ``` — a line
+        # like "```stray" must not count as a valid close.
+        block = "```\nprint('hello')\n```stray"
+        self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
