@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+
 from mdparse import (
     markdown_to_blocks,
     split_nodes_delimiter,
@@ -8,9 +10,13 @@ from mdparse import (
     split_nodes_link,
     text_to_textnodes,
     block_to_block_type,
+    block_type_to_html_node,
+    markdown_to_html_node,
     BlockType,
 )
 from textnode import TextNode, TextType
+from leafnode import LeafNode
+from parentnode import ParentNode
 
 
 class TestSplitNodesDelimiter(unittest.TestCase):
@@ -702,3 +708,199 @@ class TestBlockToBlockType(unittest.TestCase):
         # like "```stray" must not count as a valid close.
         block = "```\nprint('hello')\n```stray"
         self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
+
+
+class TestBlockTypeToHtmlNode(unittest.TestCase):
+    def test_paragraph(self):
+        node = block_type_to_html_node("Just plain text.", BlockType.PARAGRAPH)
+        self.assertEqual(
+            node,
+            ParentNode(tag="p", children=[LeafNode(tag=None, value="Just plain text.")]),
+        )
+
+    def test_paragraph_with_inline_formatting(self):
+        node = block_type_to_html_node(
+            "This is **bold** and _italic_ text.", BlockType.PARAGRAPH
+        )
+        self.assertEqual(
+            node,
+            ParentNode(
+                tag="p",
+                children=[
+                    LeafNode(tag=None, value="This is "),
+                    LeafNode(tag="b", value="bold"),
+                    LeafNode(tag=None, value=" and "),
+                    LeafNode(tag="i", value="italic"),
+                    LeafNode(tag=None, value=" text."),
+                ],
+            ),
+        )
+
+    def test_heading_level_1(self):
+        node = block_type_to_html_node("# Heading text", BlockType.HEADING)
+        self.assertEqual(
+            node,
+            ParentNode(tag="h1", children=[LeafNode(tag=None, value="Heading text")]),
+        )
+
+    def test_heading_level_6(self):
+        node = block_type_to_html_node("###### Deep heading", BlockType.HEADING)
+        self.assertEqual(
+            node,
+            ParentNode(tag="h6", children=[LeafNode(tag=None, value="Deep heading")]),
+        )
+
+    def test_code_block_without_language(self):
+        block = "```\nprint('hello')\n```"
+        node = block_type_to_html_node(block, BlockType.CODE)
+        self.assertEqual(
+            node,
+            ParentNode(tag="pre", children=[LeafNode(tag="code", value="print('hello')")]),
+        )
+
+    def test_code_block_with_language_tag_is_stripped(self):
+        # The language identifier on the opening fence must not leak into
+        # the rendered code content.
+        block = "```python\ndef example():\n    print(\"hi\")\n```"
+        node = block_type_to_html_node(block, BlockType.CODE)
+        self.assertEqual(
+            node,
+            ParentNode(
+                tag="pre",
+                children=[LeafNode(tag="code", value="def example():\n    print(\"hi\")")],
+            ),
+        )
+
+    def test_code_block_content_is_literal_not_parsed_as_markdown(self):
+        # Code block content bypasses text_to_textnodes entirely, so
+        # markdown-looking characters inside it stay literal.
+        block = "```\n**not bold**\n```"
+        node = block_type_to_html_node(block, BlockType.CODE)
+        self.assertEqual(
+            node,
+            ParentNode(tag="pre", children=[LeafNode(tag="code", value="**not bold**")]),
+        )
+
+    def test_quote_single_line(self):
+        node = block_type_to_html_node("> a wise quote", BlockType.QUOTE)
+        self.assertEqual(
+            node,
+            ParentNode(tag="blockquote", children=[LeafNode(tag=None, value="a wise quote")]),
+        )
+
+    def test_quote_multiple_lines_joined_with_newline(self):
+        block = "> line one\n>line two"
+        node = block_type_to_html_node(block, BlockType.QUOTE)
+        self.assertEqual(
+            node,
+            ParentNode(
+                tag="blockquote",
+                children=[LeafNode(tag=None, value="line one\nline two")],
+            ),
+        )
+
+    def test_ulist(self):
+        block = "- first item\n- second **bold** item"
+        node = block_type_to_html_node(block, BlockType.ULIST)
+        self.assertEqual(
+            node,
+            ParentNode(
+                tag="ul",
+                children=[
+                    ParentNode(tag="li", children=[LeafNode(tag=None, value="first item")]),
+                    ParentNode(
+                        tag="li",
+                        children=[
+                            LeafNode(tag=None, value="second "),
+                            LeafNode(tag="b", value="bold"),
+                            LeafNode(tag=None, value=" item"),
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+    def test_olist(self):
+        block = "1. first item\n2. second item"
+        node = block_type_to_html_node(block, BlockType.OLIST)
+        self.assertEqual(
+            node,
+            ParentNode(
+                tag="ol",
+                children=[
+                    ParentNode(tag="li", children=[LeafNode(tag=None, value="first item")]),
+                    ParentNode(tag="li", children=[LeafNode(tag=None, value="second item")]),
+                ],
+            ),
+        )
+
+
+class TestMarkdownToHtmlNode(unittest.TestCase):
+    EXAMPLE_MARKDOWN_PATH = Path(__file__).resolve().parent.parent / "example_markdown.md"
+
+    def test_markdown_to_html_node_with_headings_paragraphs_and_lists(self):
+        md = """# This is a heading
+
+This is a paragraph and beneath it is an unordered list:
+
+- list item
+- another list item
+- one more
+
+Another paragraph before an ordered list:
+
+1. list item
+2. another list item
+3. one more
+"""
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div>"
+            "<h1>This is a heading</h1>"
+            "<p>This is a paragraph and beneath it is an unordered list:</p>"
+            "<ul><li>list item</li><li>another list item</li><li>one more</li></ul>"
+            "<p>Another paragraph before an ordered list:</p>"
+            "<ol><li>list item</li><li>another list item</li><li>one more</li></ol>"
+            "</div>",
+        )
+
+    def test_markdown_to_html_node_with_quote_and_code_block(self):
+        md = """> You miss 100% of the shots you don't take
+> Wayne Gretzky
+
+```python
+def example_code(args):
+\tprint("hello world, this is python in a code block")
+```
+"""
+        html = markdown_to_html_node(md).to_html()
+        self.assertEqual(
+            html,
+            "<div>"
+            "<blockquote>You miss 100% of the shots you don't take\nWayne Gretzky</blockquote>"
+            '<pre><code>def example_code(args):\n\tprint("hello world, this is python in a code block")</code></pre>'
+            "</div>",
+        )
+
+    def test_markdown_to_html_node_with_example_file(self):
+        # Full-document integration test: every block type composed
+        # together in one pass, using the example file kept in the repo
+        # root as the source of truth for the input.
+        markdown = self.EXAMPLE_MARKDOWN_PATH.read_text()
+        html = markdown_to_html_node(markdown).to_html()
+        self.assertEqual(
+            html,
+            "<div>"
+            "<h1>This is a heading</h1>"
+            "<p>This is a paragraph and beneath it is an unordered list:</p>"
+            "<ul><li>list item</li><li>another list item</li><li>one more</li></ul>"
+            "<p>Another paragraph before an ordered list:</p>"
+            "<ol><li>list item</li><li>another list item</li><li>one more</li></ol>"
+            "<h2>Here's a second level heading.</h2>"
+            "<p>Next up, we will test quotes:</p>"
+            "<blockquote>You miss 100% of the shots you don't take\nWayne Gretzky</blockquote>"
+            "<p>Now a code block:</p>"
+            '<pre><code>def example_code(args):\n\tprint("hello world, this is python in a code block")</code></pre>'
+            "</div>",
+        )
