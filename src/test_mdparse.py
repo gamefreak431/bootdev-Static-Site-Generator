@@ -1,18 +1,22 @@
 import unittest
 from pathlib import Path
 
-from mdparse import (
-    markdown_to_blocks,
+from inlineparse import (
     split_nodes_delimiter,
     extract_markdown_images,
     extract_markdown_links,
     split_nodes_image,
     split_nodes_link,
     text_to_textnodes,
+)
+from blockparse import (
+    markdown_to_blocks,
     block_to_block_type,
+    BlockType,
+)
+from htmlrender import (
     block_type_to_html_node,
     markdown_to_html_node,
-    BlockType,
 )
 from textnode import TextNode, TextType
 from leafnode import LeafNode
