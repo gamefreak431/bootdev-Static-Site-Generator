@@ -12,10 +12,12 @@ from inlineparse import (
 from blockparse import (
     markdown_to_blocks,
     block_to_block_type,
+    parse_block,
+    Block,
     BlockType,
 )
 from htmlrender import (
-    block_type_to_html_node,
+    block_to_html_node,
     markdown_to_html_node,
 )
 from textnode import TextNode, TextType
@@ -714,17 +716,85 @@ class TestBlockToBlockType(unittest.TestCase):
         self.assertEqual(block_to_block_type(block), BlockType.PARAGRAPH)
 
 
-class TestBlockTypeToHtmlNode(unittest.TestCase):
+class TestParseBlock(unittest.TestCase):
+    """parse_block owns marker stripping; these assert the markers are gone."""
+
+    def test_paragraph_is_left_alone(self):
+        self.assertEqual(
+            parse_block("Just plain text."),
+            Block(type=BlockType.PARAGRAPH, content="Just plain text."),
+        )
+
+    def test_multiline_paragraph_keeps_its_newline(self):
+        self.assertEqual(
+            parse_block("Line one\nLine two"),
+            Block(type=BlockType.PARAGRAPH, content="Line one\nLine two"),
+        )
+
+    def test_heading_marker_stripped_and_level_recorded(self):
+        for level in range(1, 7):
+            with self.subTest(level=level):
+                self.assertEqual(
+                    parse_block(f"{'#' * level} Heading text"),
+                    Block(type=BlockType.HEADING, content="Heading text", level=level),
+                )
+
+    def test_code_fences_stripped(self):
+        self.assertEqual(
+            parse_block("```\nprint('hello')\n```"),
+            Block(type=BlockType.CODE, content="print('hello')"),
+        )
+
+    def test_code_language_tag_stripped(self):
+        # The language identifier lives on the opening fence, so it goes with it.
+        self.assertEqual(
+            parse_block('```python\ndef example():\n    print("hi")\n```'),
+            Block(type=BlockType.CODE, content='def example():\n    print("hi")'),
+        )
+
+    def test_code_content_is_not_inline_parsed(self):
+        self.assertEqual(
+            parse_block("```\n**not bold**\n```"),
+            Block(type=BlockType.CODE, content="**not bold**"),
+        )
+
+    def test_empty_code_block_has_empty_content(self):
+        self.assertEqual(parse_block("```\n```"), Block(type=BlockType.CODE, content=""))
+
+    def test_quote_markers_stripped_with_and_without_space(self):
+        self.assertEqual(
+            parse_block("> line one\n>line two"),
+            Block(type=BlockType.QUOTE, content="line one\nline two"),
+        )
+
+    def test_ulist_markers_stripped_into_one_item_per_line(self):
+        self.assertEqual(
+            parse_block("- first item\n- second item"),
+            Block(type=BlockType.ULIST, content=["first item", "second item"]),
+        )
+
+    def test_olist_numbers_stripped_into_one_item_per_line(self):
+        # The numbers are dropped entirely -- <ol> supplies its own.
+        self.assertEqual(
+            parse_block("1. first item\n2. second item"),
+            Block(type=BlockType.OLIST, content=["first item", "second item"]),
+        )
+
+
+class TestBlockToHtmlNode(unittest.TestCase):
+    """block_to_html_node is given already-stripped content, so these build
+    Block objects directly rather than going through parse_block."""
+
     def test_paragraph(self):
-        node = block_type_to_html_node("Just plain text.", BlockType.PARAGRAPH)
+        node = block_to_html_node(Block(type=BlockType.PARAGRAPH, content="Just plain text."))
         self.assertEqual(
             node,
             ParentNode(tag="p", children=[LeafNode(tag=None, value="Just plain text.")]),
         )
 
     def test_paragraph_with_inline_formatting(self):
-        node = block_type_to_html_node(
-            "This is **bold** and _italic_ text.", BlockType.PARAGRAPH
+        node = block_to_html_node(
+            Block(type=BlockType.PARAGRAPH, content="This is **bold** and _italic_ text.")
         )
         self.assertEqual(
             node,
@@ -741,60 +811,50 @@ class TestBlockTypeToHtmlNode(unittest.TestCase):
         )
 
     def test_heading_level_1(self):
-        node = block_type_to_html_node("# Heading text", BlockType.HEADING)
+        node = block_to_html_node(
+            Block(type=BlockType.HEADING, content="Heading text", level=1)
+        )
         self.assertEqual(
             node,
             ParentNode(tag="h1", children=[LeafNode(tag=None, value="Heading text")]),
         )
 
     def test_heading_level_6(self):
-        node = block_type_to_html_node("###### Deep heading", BlockType.HEADING)
+        node = block_to_html_node(
+            Block(type=BlockType.HEADING, content="Deep heading", level=6)
+        )
         self.assertEqual(
             node,
             ParentNode(tag="h6", children=[LeafNode(tag=None, value="Deep heading")]),
         )
 
-    def test_code_block_without_language(self):
-        block = "```\nprint('hello')\n```"
-        node = block_type_to_html_node(block, BlockType.CODE)
+    def test_code_block(self):
+        node = block_to_html_node(Block(type=BlockType.CODE, content="print('hello')"))
         self.assertEqual(
             node,
             ParentNode(tag="pre", children=[LeafNode(tag="code", value="print('hello')")]),
         )
 
-    def test_code_block_with_language_tag_is_stripped(self):
-        # The language identifier on the opening fence must not leak into
-        # the rendered code content.
-        block = "```python\ndef example():\n    print(\"hi\")\n```"
-        node = block_type_to_html_node(block, BlockType.CODE)
-        self.assertEqual(
-            node,
-            ParentNode(
-                tag="pre",
-                children=[LeafNode(tag="code", value="def example():\n    print(\"hi\")")],
-            ),
-        )
-
     def test_code_block_content_is_literal_not_parsed_as_markdown(self):
-        # Code block content bypasses text_to_textnodes entirely, so
-        # markdown-looking characters inside it stay literal.
-        block = "```\n**not bold**\n```"
-        node = block_type_to_html_node(block, BlockType.CODE)
+        # Code content bypasses text_to_textnodes entirely, so markdown-looking
+        # characters inside it stay literal.
+        node = block_to_html_node(Block(type=BlockType.CODE, content="**not bold**"))
         self.assertEqual(
             node,
             ParentNode(tag="pre", children=[LeafNode(tag="code", value="**not bold**")]),
         )
 
     def test_quote_single_line(self):
-        node = block_type_to_html_node("> a wise quote", BlockType.QUOTE)
+        node = block_to_html_node(Block(type=BlockType.QUOTE, content="a wise quote"))
         self.assertEqual(
             node,
             ParentNode(tag="blockquote", children=[LeafNode(tag=None, value="a wise quote")]),
         )
 
     def test_quote_multiple_lines_joined_with_newline(self):
-        block = "> line one\n>line two"
-        node = block_type_to_html_node(block, BlockType.QUOTE)
+        node = block_to_html_node(
+            Block(type=BlockType.QUOTE, content="line one\nline two")
+        )
         self.assertEqual(
             node,
             ParentNode(
@@ -804,8 +864,9 @@ class TestBlockTypeToHtmlNode(unittest.TestCase):
         )
 
     def test_ulist(self):
-        block = "- first item\n- second **bold** item"
-        node = block_type_to_html_node(block, BlockType.ULIST)
+        node = block_to_html_node(
+            Block(type=BlockType.ULIST, content=["first item", "second **bold** item"])
+        )
         self.assertEqual(
             node,
             ParentNode(
@@ -825,8 +886,9 @@ class TestBlockTypeToHtmlNode(unittest.TestCase):
         )
 
     def test_olist(self):
-        block = "1. first item\n2. second item"
-        node = block_type_to_html_node(block, BlockType.OLIST)
+        node = block_to_html_node(
+            Block(type=BlockType.OLIST, content=["first item", "second item"])
+        )
         self.assertEqual(
             node,
             ParentNode(
@@ -837,6 +899,11 @@ class TestBlockTypeToHtmlNode(unittest.TestCase):
                 ],
             ),
         )
+
+    def test_unsupported_block_type_raises(self):
+        node = Block(type="not a block type", content="whatever")
+        with self.assertRaises(ValueError):
+            block_to_html_node(node)
 
 
 class TestMarkdownToHtmlNode(unittest.TestCase):

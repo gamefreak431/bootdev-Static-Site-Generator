@@ -3,23 +3,12 @@
 This is the only module that decides HTML tags. It imports the parsers; the
 parsers never import it.
 
-NOTE: the line patterns imported from blockparse below are a temporary leak --
-this module still strips markdown markers itself. A later step moves that
-stripping into blockparse, after which this module needs no markdown knowledge
-at all. When the blockparse import below reads only `BlockType`, the parse/render
-boundary is clean.
+It holds no markdown knowledge: it never imports `re` and never sees a `#`, a
+`>` or a `-`. The parsers hand it content with every marker already stripped,
+so its only job is choosing a tag and nesting the children.
 """
 
-import re
-
-from blockparse import (
-    BlockType,
-    block_to_block_type,
-    markdown_to_blocks,
-    OLIST_LINE_PATTERN,
-    QUOTE_LINE_PATTERN,
-    ULIST_LINE_PATTERN,
-)
+from blockparse import Block, BlockType, markdown_to_blocks, parse_block
 from inlineparse import text_to_textnodes
 from leafnode import LeafNode
 from parentnode import ParentNode
@@ -57,45 +46,38 @@ def text_node_to_html_node(text_node: TextNode) -> LeafNode:
         case _:
             raise ValueError(f"Unsupported text type: {text_node.text_type}")
 
-def block_type_to_html_node(block: str, block_type: BlockType) -> ParentNode:
-    match block_type:
+def block_to_html_node(block: Block) -> ParentNode:
+    """Render a parsed block as its HTML element.
+    Args:
+        block (Block): The classified, marker-stripped block.
+    Returns:
+        ParentNode: The HTML element for that block.
+    """
+    match block.type:
         case BlockType.PARAGRAPH:
-            text_nodes = text_to_textnodes(block)
-            html_children = [text_node_to_html_node(text_node) for text_node in text_nodes]
-            return ParentNode(tag="p", children=html_children)
+            return ParentNode(tag="p", children=_inline_children(block.content))
         case BlockType.HEADING:
-            heading_level = len(re.match(r"^(#+)\s", block).group(1))
-            heading_text = re.sub(r"^#{1,6}\s", "", block)
-            text_nodes = text_to_textnodes(heading_text)
-            html_children = [text_node_to_html_node(text_node) for text_node in text_nodes]
-            return ParentNode(tag=f"h{heading_level}", children=html_children)
+            return ParentNode(tag=f"h{block.level}", children=_inline_children(block.content))
         case BlockType.CODE:
-            code_content = "\n".join(block.split("\n")[1:-1])
-            return ParentNode(tag="pre", children=[LeafNode(tag="code", value=code_content)])
+            return ParentNode(tag="pre", children=[LeafNode(tag="code", value=block.content)])
         case BlockType.QUOTE:
-            quote_lines = [re.sub(QUOTE_LINE_PATTERN, "", line) for line in block.split("\n")]
-            quote_text = "\n".join(quote_lines)
-            text_nodes = text_to_textnodes(quote_text)
-            html_children = [text_node_to_html_node(text_node) for text_node in text_nodes]
-            return ParentNode(tag="blockquote", children=html_children)
+            return ParentNode(tag="blockquote", children=_inline_children(block.content))
         case BlockType.ULIST:
-            list_items = [re.sub(ULIST_LINE_PATTERN, "", line) for line in block.split("\n")]
-            html_children = []
-            for item in list_items:
-                text_nodes = text_to_textnodes(item)
-                li_children = [text_node_to_html_node(text_node) for text_node in text_nodes]
-                html_children.append(ParentNode(tag="li", children=li_children))
-            return ParentNode(tag="ul", children=html_children)
+            return ParentNode(tag="ul", children=_list_items(block.content))
         case BlockType.OLIST:
-            list_items = [re.sub(OLIST_LINE_PATTERN, "", line) for line in block.split("\n")]
-            html_children = []
-            for item in list_items:
-                text_nodes = text_to_textnodes(item)
-                li_children = [text_node_to_html_node(text_node) for text_node in text_nodes]
-                html_children.append(ParentNode(tag="li", children=li_children))
-            return ParentNode(tag="ol", children=html_children)
+            # <ol> numbers its own items, so ordered and unordered lists render
+            # identically once their markers are gone.
+            return ParentNode(tag="ol", children=_list_items(block.content))
         case _:
-            raise ValueError(f"Unsupported block type: {block_type}")
+            raise ValueError(f"Unsupported block type: {block.type}")
+
+def _inline_children(text: str) -> list[LeafNode]:
+    """Parse inline markdown in a string and render each piece as an HTML leaf."""
+    return [text_node_to_html_node(text_node) for text_node in text_to_textnodes(text)]
+
+def _list_items(items: list[str]) -> list[ParentNode]:
+    """Render each already-stripped list item as an <li>."""
+    return [ParentNode(tag="li", children=_inline_children(item)) for item in items]
 
 def markdown_to_html_node(markdown: str) -> ParentNode:
     """Convert a markdown string to an HTML node.
@@ -104,10 +86,7 @@ def markdown_to_html_node(markdown: str) -> ParentNode:
     Returns:
         ParentNode: The HTML node representing the markdown.
     """
-    blocks = markdown_to_blocks(markdown)
-    html_nodes = []
-    for block in blocks:
-        block_type = block_to_block_type(block)
-        node = block_type_to_html_node(block, block_type)
-        html_nodes.append(node)
-    return ParentNode(tag="div", children=html_nodes)
+    return ParentNode(
+        tag="div",
+        children=[block_to_html_node(parse_block(block)) for block in markdown_to_blocks(markdown)],
+    )

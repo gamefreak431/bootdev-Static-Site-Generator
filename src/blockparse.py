@@ -1,13 +1,17 @@
 """Block-level markdown parsing: a document -> blocks, and each block's type.
 
 Knows about block-level markdown syntax (fences, markers, prefixes) and nothing
-about HTML. Produces plain strings and BlockType values.
+about HTML. This module is the only place that knows what a markdown block
+marker looks like: it both recognises markers and strips them, so the renderer
+receives content that carries no markdown syntax at all.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 import re
 
 
+HEADING_LINE_PATTERN = re.compile(r"^(#{1,6})\s")
 QUOTE_LINE_PATTERN = re.compile(r"^>\s?")
 ULIST_LINE_PATTERN = re.compile(r"^\-\s")
 OLIST_LINE_PATTERN = re.compile(r"^(\d+)\.\s")
@@ -55,7 +59,7 @@ def block_to_block_type(block: str) -> BlockType:
         return len(lines) > 1 and lines[0].startswith("```") and lines[-1] == "```"
 
     match block:
-        case _ if re.match(r"^#{1,6}\s", block):
+        case _ if HEADING_LINE_PATTERN.match(block):
             return BlockType.HEADING
         case _ if _is_valid_quote(block):
             return BlockType.QUOTE
@@ -67,3 +71,54 @@ def block_to_block_type(block: str) -> BlockType:
             return BlockType.CODE
         case _:
             return BlockType.PARAGRAPH
+
+@dataclass
+class Block:
+    """A classified markdown block with its syntax markers removed.
+
+    Attributes:
+        type (BlockType): What kind of block this is.
+        content (str | list[str]): The block's text with markers stripped --
+            a single string, or one string per item for list blocks.
+        level (int | None): Heading depth 1-6; None for every other block type.
+    """
+    type: BlockType
+    content: str | list[str]
+    level: int | None = None
+
+def parse_block(block: str) -> Block:
+    """Classify a markdown block and strip its markdown markers.
+    Args:
+        block (str): The raw markdown block.
+    Returns:
+        Block: The block's type and its content with markers removed.
+    """
+    block_type = block_to_block_type(block)
+    lines = block.split("\n")
+    match block_type:
+        case BlockType.HEADING:
+            return Block(
+                type=block_type,
+                content=HEADING_LINE_PATTERN.sub("", block),
+                level=len(HEADING_LINE_PATTERN.match(block).group(1)),
+            )
+        case BlockType.CODE:
+            # Drop the opening fence (with any language tag) and the closing fence.
+            return Block(type=block_type, content="\n".join(lines[1:-1]))
+        case BlockType.QUOTE:
+            return Block(
+                type=block_type,
+                content="\n".join(QUOTE_LINE_PATTERN.sub("", line) for line in lines),
+            )
+        case BlockType.ULIST:
+            return Block(
+                type=block_type,
+                content=[ULIST_LINE_PATTERN.sub("", line) for line in lines],
+            )
+        case BlockType.OLIST:
+            return Block(
+                type=block_type,
+                content=[OLIST_LINE_PATTERN.sub("", line) for line in lines],
+            )
+        case _:
+            return Block(type=block_type, content=block)
