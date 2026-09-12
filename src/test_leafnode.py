@@ -18,9 +18,15 @@ class TestLeafNode(unittest.TestCase):
         self.assertEqual(node.to_html(), "This is just text.")
 
     def test_to_html_without_value_raises_error(self):
-        node = LeafNode(tag="p", value="")
+        node = LeafNode(tag="p", value=None)
         with self.assertRaises(ValueError):
             node.to_html()
+
+    def test_to_html_with_empty_value_renders_empty_element(self):
+        # An empty string is content, not a missing value: only None means the
+        # leaf was built without one.
+        node = LeafNode(tag="code", value="")
+        self.assertEqual(node.to_html(), "<code></code>")
 
     def test_to_html_with_void_tag_has_no_closing_tag(self):
         node = LeafNode(tag="img", value="", props={"src": "a.png", "alt": "alt text"})

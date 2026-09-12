@@ -20,7 +20,7 @@ class LeafNode(HTMLNode):
         # correct, not missing, so it must not be treated as an error.
         if self.tag in VOID_TAGS:
             return f"<{self.tag}{self.props_to_html()}>"
-        if not self.value:
+        if self.value is None:
             raise ValueError("LeafNode must have a value to render.")
         if not self.tag:
             return self.value

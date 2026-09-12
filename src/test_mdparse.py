@@ -975,12 +975,19 @@ def example_code(args):
             '<pre><code>def example_code(args):\n\tprint("hello world, this is python in a code block")</code></pre>'
             "</div>",
         )
-    def test_markdown_to_html_node_with_empty_code_block_raises(self):
-        # A code block with no content is not renderable: a fenced block is
-        # expected to contain something. Asserted against the whole pipeline
-        # so it holds wherever the check ends up living.
-        with self.assertRaises(ValueError):
-            markdown_to_html_node("```\n```").to_html()
+    def test_markdown_to_html_node_with_empty_code_block(self):
+        # An empty fenced block is valid HTML and renders as an empty element
+        # rather than raising.
+        self.assertEqual(
+            markdown_to_html_node("```\n```").to_html(),
+            "<div><pre><code></code></pre></div>",
+        )
+
+    def test_markdown_to_html_node_with_empty_quote(self):
+        self.assertEqual(
+            markdown_to_html_node("> ").to_html(),
+            "<div><blockquote></blockquote></div>",
+        )
 
     def test_markdown_to_html_node_with_image(self):
         md = "Look at this ![alt text](https://boot.dev/image.png)"
