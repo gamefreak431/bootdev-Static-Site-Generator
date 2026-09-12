@@ -22,6 +22,20 @@ class TestLeafNode(unittest.TestCase):
         with self.assertRaises(ValueError):
             node.to_html()
 
+    def test_to_html_with_void_tag_has_no_closing_tag(self):
+        node = LeafNode(tag="img", value="", props={"src": "a.png", "alt": "alt text"})
+        self.assertEqual(node.to_html(), '<img src="a.png" alt="alt text">')
+
+    def test_to_html_with_void_tag_and_no_props(self):
+        node = LeafNode(tag="hr", value="")
+        self.assertEqual(node.to_html(), "<hr>")
+
+    def test_to_html_with_void_tag_does_not_raise_on_empty_value(self):
+        # A void element's content is its attributes, so an empty value is
+        # expected rather than a missing one.
+        node = LeafNode(tag="br", value="")
+        self.assertEqual(node.to_html(), "<br>")
+
     def test_repr(self):
         node = LeafNode(tag="p", value="This is a paragraph.", props={"class": "text"})
         self.assertEqual(
