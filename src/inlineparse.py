@@ -9,8 +9,7 @@ import re
 from textnode import TextNode, TextType
 
 
-IMAGE_REGEX = re.compile(r'!\[(.*?)\]\((.*?)\)')
-LINK_REGEX = re.compile(r'(?<!!)\[(.*?)\]\((.*?)\)')
+MEDIA_REGEX = re.compile(r'(?P<bang>!?)\[(?P<text>.*?)\]\((?P<url>.*?)\)')
 
 def split_nodes_delimiter(old_nodes: list[TextNode], delimiter: str, text_type: TextType) -> list[TextNode]:
     """Split text nodes by a delimiter and return a list of new text nodes.
@@ -35,17 +34,18 @@ def split_nodes_delimiter(old_nodes: list[TextNode], delimiter: str, text_type: 
         )
     return new_nodes
 
-def _split_link_or_image(old_nodes: list[TextNode], regex: re.Pattern[str], text_type: TextType) -> list[TextNode]:
+def _split_link_and_image(old_nodes: list[TextNode]) -> list[TextNode]:
     new_nodes = []
     for node in old_nodes:
         if node.text_type != TextType.TEXT:
             new_nodes.append(node)
             continue
         last_index = 0
-        for match in regex.finditer(node.text):
+        for match in MEDIA_REGEX.finditer(node.text):
+            text_type = TextType.IMAGE if match.group("bang") else TextType.LINK
             if match.start() > last_index:
                 new_nodes.append(TextNode(text=node.text[last_index:match.start()], text_type=TextType.TEXT))
-            new_nodes.append(TextNode(text=match.group(1), text_type=text_type, url=match.group(2)))
+            new_nodes.append(TextNode(text=match.group("text"), text_type=text_type, url=match.group("url")))
             last_index = match.end()
         if last_index == 0:
             new_nodes.append(node)
@@ -65,8 +65,7 @@ def text_to_textnodes(text: str) -> list[TextNode]:
         ("_", TextType.ITALIC),
     ]
 
-    nodes = _split_link_or_image([TextNode(text=text, text_type=TextType.TEXT)], IMAGE_REGEX, TextType.IMAGE)
-    nodes = _split_link_or_image(nodes, LINK_REGEX, TextType.LINK)
+    nodes = _split_link_and_image([TextNode(text=text, text_type=TextType.TEXT)])
     for delimiter, text_type in delimiters:
         nodes = split_nodes_delimiter(nodes, delimiter, text_type) or nodes
     return nodes

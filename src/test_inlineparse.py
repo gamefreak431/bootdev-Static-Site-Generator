@@ -2,9 +2,7 @@ import unittest
 
 from inlineparse import (
     split_nodes_delimiter,
-    _split_link_or_image,
-    IMAGE_REGEX,
-    LINK_REGEX,
+    _split_link_and_image,
     text_to_textnodes,
 )
 from textnode import TextNode, TextType
@@ -102,13 +100,13 @@ class TestSplitNodesDelimiter(unittest.TestCase):
         self.assertEqual(new_nodes, [])
 
 
-class TestSplitNodesImage(unittest.TestCase):
+class TestSplitLinkAndImage(unittest.TestCase):
     def test_split_images(self):
         node = TextNode(
             "This is text with an ![image](https://i.imgur.com/zjjcJKZ.png) and another ![second image](https://i.imgur.com/3elNhQu.png)",
             TextType.TEXT,
         )
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
                 TextNode("This is text with an ", TextType.TEXT),
@@ -119,139 +117,12 @@ class TestSplitNodesImage(unittest.TestCase):
             new_nodes,
         )
 
-    def test_split_images_with_no_images(self):
-        node = TextNode("This is plain text with no images.", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual([node], new_nodes)
-
-    def test_split_images_with_image_at_start(self):
-        node = TextNode(
-            "![image](https://i.imgur.com/zjjcJKZ.png) and text after", TextType.TEXT
-        )
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-                TextNode(" and text after", TextType.TEXT),
-            ],
-            new_nodes,
-        )
-
-    def test_split_images_with_image_at_end(self):
-        node = TextNode(
-            "text before and ![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT
-        )
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("text before and ", TextType.TEXT),
-                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-            ],
-            new_nodes,
-        )
-
-    def test_split_images_with_only_image(self):
-        node = TextNode("![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png")],
-            new_nodes,
-        )
-
-    def test_split_images_with_adjacent_images(self):
-        node = TextNode(
-            "![a](https://i.imgur.com/aaa.png)![b](https://i.imgur.com/bbb.png)",
-            TextType.TEXT,
-        )
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("a", TextType.IMAGE, "https://i.imgur.com/aaa.png"),
-                TextNode("b", TextType.IMAGE, "https://i.imgur.com/bbb.png"),
-            ],
-            new_nodes,
-        )
-
-    def test_split_images_passes_through_non_text_nodes(self):
-        old_nodes = [
-            TextNode("already bold", TextType.BOLD),
-            TextNode("a link", TextType.LINK, "https://boot.dev"),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(old_nodes, new_nodes)
-
-    def test_split_images_with_multiple_nodes_mixed(self):
-        old_nodes = [
-            TextNode("no images here", TextType.TEXT),
-            TextNode(
-                "with an ![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT
-            ),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("no images here", TextType.TEXT),
-                TextNode("with an ", TextType.TEXT),
-                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-            ],
-            new_nodes,
-        )
-
-    def test_split_images_with_matched_node_then_no_match_node(self):
-        old_nodes = [
-            TextNode(
-                "with an ![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT
-            ),
-            TextNode("no images here", TextType.TEXT),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("with an ", TextType.TEXT),
-                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-                TextNode("no images here", TextType.TEXT),
-            ],
-            new_nodes,
-        )
-
-    def test_split_images_with_empty_old_nodes(self):
-        self.assertListEqual([], _split_link_or_image([], IMAGE_REGEX, TextType.IMAGE))
-
-    def test_split_images_with_empty_text_node(self):
-        node = TextNode("", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual([node], new_nodes)
-
-    def test_split_images_with_empty_alt_text(self):
-        node = TextNode("![](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [TextNode("", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png")],
-            new_nodes,
-        )
-
-    def test_split_images_ignores_links(self):
-        node = TextNode(
-            "![image](https://i.imgur.com/zjjcJKZ.png) and a [link](https://boot.dev)",
-            TextType.TEXT,
-        )
-        new_nodes = _split_link_or_image([node], IMAGE_REGEX, TextType.IMAGE)
-        self.assertListEqual(
-            [
-                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-                TextNode(" and a [link](https://boot.dev)", TextType.TEXT),
-            ],
-            new_nodes,
-        )
-
-
-class TestSplitNodesLink(unittest.TestCase):
     def test_split_links(self):
         node = TextNode(
             "This is text with a [link](https://boot.dev) and another [second link](https://www.youtube.com/@bootdotdev)",
             TextType.TEXT,
         )
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
                 TextNode("This is text with a ", TextType.TEXT),
@@ -264,14 +135,40 @@ class TestSplitNodesLink(unittest.TestCase):
             new_nodes,
         )
 
-    def test_split_links_with_no_links(self):
-        node = TextNode("This is plain text with no links.", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+    def test_split_with_no_matches(self):
+        node = TextNode("This is plain text with no links or images.", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual([node], new_nodes)
 
-    def test_split_links_with_link_at_start(self):
+    def test_split_with_image_at_start(self):
+        node = TextNode(
+            "![image](https://i.imgur.com/zjjcJKZ.png) and text after", TextType.TEXT
+        )
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+                TextNode(" and text after", TextType.TEXT),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_image_at_end(self):
+        node = TextNode(
+            "text before and ![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT
+        )
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("text before and ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_link_at_start(self):
         node = TextNode("[link](https://boot.dev) and text after", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
                 TextNode("link", TextType.LINK, "https://boot.dev"),
@@ -280,9 +177,9 @@ class TestSplitNodesLink(unittest.TestCase):
             new_nodes,
         )
 
-    def test_split_links_with_link_at_end(self):
+    def test_split_with_link_at_end(self):
         node = TextNode("text before and [link](https://boot.dev)", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
                 TextNode("text before and ", TextType.TEXT),
@@ -291,18 +188,40 @@ class TestSplitNodesLink(unittest.TestCase):
             new_nodes,
         )
 
-    def test_split_links_with_only_link(self):
+    def test_split_with_only_image(self):
+        node = TextNode("![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png")],
+            new_nodes,
+        )
+
+    def test_split_with_only_link(self):
         node = TextNode("[link](https://boot.dev)", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [TextNode("link", TextType.LINK, "https://boot.dev")], new_nodes
         )
 
-    def test_split_links_with_adjacent_links(self):
+    def test_split_with_adjacent_images(self):
+        node = TextNode(
+            "![a](https://i.imgur.com/aaa.png)![b](https://i.imgur.com/bbb.png)",
+            TextType.TEXT,
+        )
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("a", TextType.IMAGE, "https://i.imgur.com/aaa.png"),
+                TextNode("b", TextType.IMAGE, "https://i.imgur.com/bbb.png"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_adjacent_links(self):
         node = TextNode(
             "[a](https://boot.dev/a)[b](https://boot.dev/b)", TextType.TEXT
         )
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
                 TextNode("a", TextType.LINK, "https://boot.dev/a"),
@@ -311,71 +230,131 @@ class TestSplitNodesLink(unittest.TestCase):
             new_nodes,
         )
 
-    def test_split_links_passes_through_non_text_nodes(self):
-        old_nodes = [
-            TextNode("already bold", TextType.BOLD),
-            TextNode("an image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, LINK_REGEX, TextType.LINK)
-        self.assertListEqual(old_nodes, new_nodes)
-
-    def test_split_links_with_multiple_nodes_mixed(self):
-        old_nodes = [
-            TextNode("no links here", TextType.TEXT),
-            TextNode("with a [link](https://boot.dev)", TextType.TEXT),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, LINK_REGEX, TextType.LINK)
-        self.assertListEqual(
-            [
-                TextNode("no links here", TextType.TEXT),
-                TextNode("with a ", TextType.TEXT),
-                TextNode("link", TextType.LINK, "https://boot.dev"),
-            ],
-            new_nodes,
-        )
-
-    def test_split_links_with_matched_node_then_no_match_node(self):
-        old_nodes = [
-            TextNode("with a [link](https://boot.dev)", TextType.TEXT),
-            TextNode("no links here", TextType.TEXT),
-        ]
-        new_nodes = _split_link_or_image(old_nodes, LINK_REGEX, TextType.LINK)
-        self.assertListEqual(
-            [
-                TextNode("with a ", TextType.TEXT),
-                TextNode("link", TextType.LINK, "https://boot.dev"),
-                TextNode("no links here", TextType.TEXT),
-            ],
-            new_nodes,
-        )
-
-    def test_split_links_with_empty_old_nodes(self):
-        self.assertListEqual([], _split_link_or_image([], LINK_REGEX, TextType.LINK))
-
-    def test_split_links_with_empty_text_node(self):
-        node = TextNode("", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
-        self.assertListEqual([node], new_nodes)
-
-    def test_split_links_with_empty_link_text(self):
-        node = TextNode("[](https://boot.dev)", TextType.TEXT)
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
-        self.assertListEqual(
-            [TextNode("", TextType.LINK, "https://boot.dev")],
-            new_nodes,
-        )
-
-    def test_split_links_ignores_images(self):
+    def test_split_image_before_link_keeps_document_order(self):
+        # A single pass must emit both kinds in the order they appear, with
+        # the text between them split exactly once.
         node = TextNode(
-            "![image](https://i.imgur.com/zjjcJKZ.png) and a [link](https://boot.dev)",
+            "an ![image](https://i.imgur.com/zjjcJKZ.png) and a [link](https://boot.dev)",
             TextType.TEXT,
         )
-        new_nodes = _split_link_or_image([node], LINK_REGEX, TextType.LINK)
+        new_nodes = _split_link_and_image([node])
         self.assertListEqual(
             [
-                TextNode("![image](https://i.imgur.com/zjjcJKZ.png) and a ", TextType.TEXT),
+                TextNode("an ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+                TextNode(" and a ", TextType.TEXT),
                 TextNode("link", TextType.LINK, "https://boot.dev"),
             ],
+            new_nodes,
+        )
+
+    def test_split_link_before_image_keeps_document_order(self):
+        # The harder direction: scanning images first must not emit the
+        # trailing image ahead of the link that precedes it.
+        node = TextNode(
+            "a [link](https://boot.dev) then an ![image](https://i.imgur.com/zjjcJKZ.png)",
+            TextType.TEXT,
+        )
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("a ", TextType.TEXT),
+                TextNode("link", TextType.LINK, "https://boot.dev"),
+                TextNode(" then an ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_adjacent_image_and_link(self):
+        node = TextNode(
+            "![a](https://boot.dev/a.png)[b](https://boot.dev/b)", TextType.TEXT
+        )
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("a", TextType.IMAGE, "https://boot.dev/a.png"),
+                TextNode("b", TextType.LINK, "https://boot.dev/b"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_distinguishes_image_from_link_by_leading_bang(self):
+        # Same label and target either side of the '!': only the bang
+        # decides which TextType a match becomes.
+        node = TextNode("![x](https://boot.dev/x) [x](https://boot.dev/x)", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [
+                TextNode("x", TextType.IMAGE, "https://boot.dev/x"),
+                TextNode(" ", TextType.TEXT),
+                TextNode("x", TextType.LINK, "https://boot.dev/x"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_passes_through_non_text_nodes(self):
+        old_nodes = [
+            TextNode("already bold", TextType.BOLD),
+            TextNode("a link", TextType.LINK, "https://boot.dev"),
+            TextNode("an image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+        ]
+        new_nodes = _split_link_and_image(old_nodes)
+        self.assertListEqual(old_nodes, new_nodes)
+
+    def test_split_with_multiple_nodes_mixed(self):
+        old_nodes = [
+            TextNode("no matches here", TextType.TEXT),
+            TextNode(
+                "with an ![image](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT
+            ),
+        ]
+        new_nodes = _split_link_and_image(old_nodes)
+        self.assertListEqual(
+            [
+                TextNode("no matches here", TextType.TEXT),
+                TextNode("with an ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_matched_node_then_no_match_node(self):
+        old_nodes = [
+            TextNode("with a [link](https://boot.dev)", TextType.TEXT),
+            TextNode("no matches here", TextType.TEXT),
+        ]
+        new_nodes = _split_link_and_image(old_nodes)
+        self.assertListEqual(
+            [
+                TextNode("with a ", TextType.TEXT),
+                TextNode("link", TextType.LINK, "https://boot.dev"),
+                TextNode("no matches here", TextType.TEXT),
+            ],
+            new_nodes,
+        )
+
+    def test_split_with_empty_old_nodes(self):
+        self.assertListEqual([], _split_link_and_image([]))
+
+    def test_split_with_empty_text_node(self):
+        node = TextNode("", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual([node], new_nodes)
+
+    def test_split_with_empty_alt_text(self):
+        node = TextNode("![](https://i.imgur.com/zjjcJKZ.png)", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [TextNode("", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png")],
+            new_nodes,
+        )
+
+    def test_split_with_empty_link_text(self):
+        node = TextNode("[](https://boot.dev)", TextType.TEXT)
+        new_nodes = _split_link_and_image([node])
+        self.assertListEqual(
+            [TextNode("", TextType.LINK, "https://boot.dev")],
             new_nodes,
         )
 
