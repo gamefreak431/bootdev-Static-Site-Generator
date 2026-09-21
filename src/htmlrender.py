@@ -47,11 +47,19 @@ def text_node_to_html_node(text_node: TextNode) -> LeafNode:
             raise ValueError(f"Unsupported text type: {text_node.text_type}")
 
 def block_to_html_node(block: Block) -> ParentNode:
-    """Render a parsed block as its HTML element.
+    """Render a parsed block as its HTML element, inline markup included.
+
+    This is where the two halves of the pipeline meet: the block decides the
+    parent tag, and `_inline_children` runs the block's content through
+    `text_to_textnodes` and renders each TextNode as a LeafNode. There is no
+    separate inline-parsing stage between blockparse and here -- the whole
+    inline pass happens inside this function's children.
+
     Args:
         block (Block): The classified, marker-stripped block.
     Returns:
-        ParentNode: The HTML element for that block.
+        ParentNode: The HTML element for that block, with its inline markup
+            already rendered as LeafNode children.
     """
     match block.type:
         case BlockType.PARAGRAPH:
