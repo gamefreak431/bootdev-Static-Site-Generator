@@ -5,9 +5,14 @@ STUB — not implemented yet.
 This module owns the parts of the pipeline that touch the filesystem, so that
 the parsing and rendering modules stay pure functions of their input:
 
-    extract   read the source markdown file and the HTML template  (here)
-    transform markdown -> blocks -> TextNodes                      (mdparse)
-    load      blocks -> HTMLNode tree -> write to public/          (mdparse + here)
+    extract   read the source markdown file and the HTML template   (here)
+    transform markdown -> blocks -> HTMLNode tree                   (htmlrender)
+    load      HTMLNode tree -> html string -> write to public/      (here)
+
+The whole transform step is reached through one call, markdown_to_html_node():
+htmlrender drives blockparse (document -> marker-stripped Blocks) and
+inlineparse (block content -> TextNodes) itself, so this module never imports
+either parser.
 
 Intended responsibilities:
     - copy static assets from a source directory into public/
