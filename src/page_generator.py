@@ -18,6 +18,10 @@ Intended responsibilities:
     - hand the markdown to markdown_to_html_node() and call .to_html()
     - substitute the rendered HTML (and the page title) into the template
     - write the finished page to its destination path
+    - walk a content directory and generate a page for every markdown file
+
+Callers pass in every path; this module doesn't know where the project's
+directories are.
 
 Nothing here should know anything about markdown syntax or HTML node classes
 beyond calling markdown_to_html_node().
@@ -28,12 +32,15 @@ from pathlib import Path
 from htmlrender import markdown_to_html_node
 from blockparse import extract_title
 
-static_path = Path(__file__).parent.parent / "static"
-public_path = Path(__file__).parent.parent / "public"
+def copy_static_assets(static_path: Path, public_path: Path) -> None:
+    """Replace the contents of public_path with a copy of static_path.
 
-def copy_static_assets():
+    Args:
+        static_path (Path): Directory holding the static assets to copy.
+        public_path (Path): Output directory. Deleted first if it exists.
+    """
     shutil.rmtree(public_path, ignore_errors=True)
-    shutil.copytree(static_path, public_path, dirs_exist_ok=True)
+    shutil.copytree(static_path, public_path)
 
 def generate_page(source_path: Path, template_path: Path, dest_path: Path) -> None:
     """Generate a page from a markdown source file and an HTML template.
@@ -69,3 +76,22 @@ def generate_page(source_path: Path, template_path: Path, dest_path: Path) -> No
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(dest_path, "w", encoding="utf-8") as f:
         f.write(final_html)
+
+def generate_pages_recursive(dir_path_content: Path, template_path: Path, dest_dir_path: Path) -> None:
+    """Generate an HTML page for every markdown file under dir_path_content.
+
+    The directory structure is mirrored into dest_dir_path, so
+    content/blog/tom/index.md is written to public/blog/tom/index.html.
+
+    Args:
+        dir_path_content (Path): Root directory of the markdown source files.
+        template_path (Path): Path to the HTML template file.
+        dest_dir_path (Path): Root directory to write the generated pages to.
+    """
+    for md_file in dir_path_content.rglob("*.md"):
+        dest_file = (dest_dir_path / md_file.relative_to(dir_path_content)).with_suffix(".html")
+        generate_page(
+            source_path=md_file,
+            template_path=template_path,
+            dest_path=dest_file,
+        )
