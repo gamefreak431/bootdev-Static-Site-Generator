@@ -4,6 +4,7 @@ from blockparse import (
     markdown_to_blocks,
     block_to_block_type,
     parse_block,
+    extract_title,
     Block,
     BlockType,
 )
@@ -258,6 +259,22 @@ class TestParseBlock(unittest.TestCase):
             parse_block("1. first item\n2. second item"),
             Block(type=BlockType.OLIST, content=["first item", "second item"]),
         )
+
+
+class TestExtractTitle(unittest.TestCase):
+    def test_extract_title_with_h1(self):
+        self.assertEqual(extract_title("# Hello\n\nSome text"), "Hello")
+
+    def test_extract_title_skips_h2_before_h1(self):
+        self.assertEqual(extract_title("## Sub\n\n# Title"), "Title")
+
+    def test_extract_title_with_only_h2_raises(self):
+        with self.assertRaises(ValueError):
+            extract_title("## Not a title\n\nSome text")
+
+    def test_extract_title_with_no_heading_raises(self):
+        with self.assertRaises(ValueError):
+            extract_title("Just a paragraph\n\n- and a list")
 
 if __name__ == "__main__":
     unittest.main()

@@ -122,3 +122,23 @@ def parse_block(block: str) -> Block:
             )
         case _:
             return Block(type=block_type, content=block)
+
+def extract_title(markdown: str) -> str:
+    """Extract the title from a markdown string.
+
+    The title is the text of the first h1 heading (a single `#`) in the
+    document.
+
+    Args:
+        markdown (str): The markdown string to extract the title from.
+
+    Returns:
+        str: The text of the document's first h1 heading.
+
+    Raises:
+        ValueError: If the document has no h1 heading.
+    """
+    for block in markdown_to_blocks(markdown):
+        if block_to_block_type(block) == BlockType.HEADING and len(HEADING_LINE_PATTERN.match(block).group(1)) == 1:
+            return HEADING_LINE_PATTERN.sub("", block)
+    raise ValueError("Document has no title")
