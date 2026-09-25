@@ -29,3 +29,9 @@ import shutil
 from pathlib import Path
 
 from htmlrender import markdown_to_html_node
+static_path = Path(__file__).parent.parent / "static"
+public_path = Path(__file__).parent.parent / "public"
+
+def copy_static_assets():
+    shutil.rmtree(public_path, ignore_errors=True)
+    shutil.copytree(static_path, public_path, dirs_exist_ok=True)
