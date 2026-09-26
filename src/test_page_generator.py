@@ -5,6 +5,8 @@ from pathlib import Path
 from page_generator import copy_static_assets, generate_page, generate_pages_recursive
 
 TEMPLATE = "<title>{{ Title }}</title><article>{{ Content }}</article>"
+LINKED_TEMPLATE = '<link href="/index.css"><article>{{ Content }}</article>'
+LINKED_MARKDOWN = "# Hello\n\n[Tom](/blog/tom) ![Tom](/images/tom.png) [Wiki](https://example.com/wiki)"
 
 
 class FileSystemTestCase(unittest.TestCase):
@@ -42,7 +44,7 @@ class TestGeneratePage(FileSystemTestCase):
         source = self.write("content/index.md", "# Hello\n\nSome text")
         template = self.write("template.html", TEMPLATE)
         dest = self.root / "public/index.html"
-        generate_page(source, template, dest)
+        generate_page(source, template, dest, base_path="/")
         self.assertEqual(
             dest.read_text(),
             "<title>Hello</title><article><div><h1>Hello</h1><p>Some text</p></div></article>",
@@ -52,8 +54,32 @@ class TestGeneratePage(FileSystemTestCase):
         source = self.write("content/index.md", "# Hello")
         template = self.write("template.html", TEMPLATE)
         dest = self.root / "public/blog/tom/index.html"
-        generate_page(source, template, dest)
+        generate_page(source, template, dest, base_path="/")
         self.assertTrue(dest.is_file())
+
+    def generate_linked_page(self, base_path: str) -> str:
+        source = self.write("content/index.md", LINKED_MARKDOWN)
+        template = self.write("template.html", LINKED_TEMPLATE)
+        dest = self.root / "public/index.html"
+        generate_page(source, template, dest, base_path=base_path)
+        return dest.read_text()
+
+    def test_base_path_prefixes_root_relative_links(self):
+        # Covers links from the template and from the rendered markdown.
+        html = self.generate_linked_page("/repo/")
+        self.assertIn('href="/repo/index.css"', html)
+        self.assertIn('href="/repo/blog/tom"', html)
+        self.assertIn('src="/repo/images/tom.png"', html)
+
+    def test_root_base_path_leaves_links_unchanged(self):
+        html = self.generate_linked_page("/")
+        self.assertIn('href="/index.css"', html)
+        self.assertIn('href="/blog/tom"', html)
+        self.assertIn('src="/images/tom.png"', html)
+
+    def test_base_path_leaves_absolute_urls_unchanged(self):
+        html = self.generate_linked_page("/repo/")
+        self.assertIn('href="https://example.com/wiki"', html)
 
 
 class TestGeneratePagesRecursive(FileSystemTestCase):
@@ -61,8 +87,8 @@ class TestGeneratePagesRecursive(FileSystemTestCase):
         super().setUp()
         self.template = self.write("template.html", TEMPLATE)
 
-    def generate(self):
-        generate_pages_recursive(self.root / "content", self.template, self.root / "public")
+    def generate(self, base_path="/"):
+        generate_pages_recursive(self.root / "content", self.template, self.root / "public", base_path)
 
     def test_mirrors_nested_directory_structure(self):
         self.write("content/index.md", "# Home")
@@ -88,6 +114,13 @@ class TestGeneratePagesRecursive(FileSystemTestCase):
         self.generate()
         generated = sorted(p.relative_to(self.root / "public").as_posix() for p in (self.root / "public").rglob("*"))
         self.assertEqual(generated, ["index.html"])
+
+    def test_passes_base_path_to_every_page(self):
+        self.write("content/index.md", "# Home\n\n[Tom](/blog/tom)")
+        self.write("content/blog/tom/index.md", "# Tom\n\n[Home](/)")
+        self.generate(base_path="/repo/")
+        self.assertIn('href="/repo/blog/tom"', (self.root / "public/index.html").read_text())
+        self.assertIn('href="/repo/"', (self.root / "public/blog/tom/index.html").read_text())
 
 
 if __name__ == "__main__":

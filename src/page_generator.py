@@ -5,7 +5,7 @@ the parsing and rendering modules stay pure functions of their input:
 
     extract   read the source markdown file and the HTML template   (here)
     transform markdown -> blocks -> HTMLNode tree                   (htmlrender)
-    load      HTMLNode tree -> html string -> write to public/      (here)
+    load      HTMLNode tree -> html string -> write to output dir  (here)
 
 The whole transform step is reached through one call, markdown_to_html_node():
 htmlrender drives blockparse (document -> marker-stripped Blocks) and
@@ -13,7 +13,7 @@ inlineparse (block content -> TextNodes) itself, so this module never imports
 either parser.
 
 Intended responsibilities:
-    - copy static assets from a source directory into public/
+    - copy static assets from a source directory into the output directory
     - read a markdown file and an HTML template
     - hand the markdown to markdown_to_html_node() and call .to_html()
     - substitute the rendered HTML (and the page title) into the template
@@ -42,13 +42,14 @@ def copy_static_assets(static_path: Path, public_path: Path) -> None:
     shutil.rmtree(public_path, ignore_errors=True)
     shutil.copytree(static_path, public_path)
 
-def generate_page(source_path: Path, template_path: Path, dest_path: Path) -> None:
+def generate_page(source_path: Path, template_path: Path, dest_path: Path, base_path: str) -> None:
     """Generate a page from a markdown source file and an HTML template.
 
     Args:
         source_path (Path): Path to the source markdown file.
         template_path (Path): Path to the HTML template file.
         dest_path (Path): Path to write the generated HTML file.
+        base_path (str): Base path for the generated site.
     """
     print(f"Generating page from {source_path} to {dest_path} using {template_path}")
     # Read the source markdown file
@@ -72,21 +73,26 @@ def generate_page(source_path: Path, template_path: Path, dest_path: Path) -> No
     # Substitute the rendered HTML into the template
     final_html = template_content.replace("{{ Content }}", rendered_html)
 
+    # Substitute the base path into the template
+    final_html = final_html.replace('href="/', f'href="{base_path}')
+    final_html = final_html.replace('src="/', f'src="{base_path}')
+
     # Write the finished page to its destination path
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(dest_path, "w", encoding="utf-8") as f:
         f.write(final_html)
 
-def generate_pages_recursive(dir_path_content: Path, template_path: Path, dest_dir_path: Path) -> None:
+def generate_pages_recursive(dir_path_content: Path, template_path: Path, dest_dir_path: Path, base_path: str) -> None:
     """Generate an HTML page for every markdown file under dir_path_content.
 
     The directory structure is mirrored into dest_dir_path, so
-    content/blog/tom/index.md is written to public/blog/tom/index.html.
+    content/blog/tom/index.md is written to <dest_dir_path>/blog/tom/index.html.
 
     Args:
         dir_path_content (Path): Root directory of the markdown source files.
         template_path (Path): Path to the HTML template file.
         dest_dir_path (Path): Root directory to write the generated pages to.
+        base_path (str): Base path for the generated site.
     """
     for md_file in dir_path_content.rglob("*.md"):
         dest_file = (dest_dir_path / md_file.relative_to(dir_path_content)).with_suffix(".html")
@@ -94,4 +100,5 @@ def generate_pages_recursive(dir_path_content: Path, template_path: Path, dest_d
             source_path=md_file,
             template_path=template_path,
             dest_path=dest_file,
+            base_path=base_path
         )
